@@ -37,7 +37,7 @@ export function AnswerBody({ text }: { text: string }) {
       {long && (
         <button
           onClick={() => setExpanded((v) => !v)}
-          className="mt-3 text-xs font-medium text-emerald-700 hover:underline"
+          className="mt-3 -mx-2 inline-flex min-h-9 items-center rounded px-2 text-xs font-medium text-emerald-700 hover:bg-emerald-50 hover:underline"
         >
           {expanded
             ? "收起"

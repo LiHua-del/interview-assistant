@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AnswerBody } from "@/components/AnswerBody";
 
@@ -41,17 +41,33 @@ export function PoolBrowser({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [draft, setDraft] = useState(keyword);
+  // 大屏右栏需要默认有内容，但小屏一进来就展开长答案会把列表挤出首屏。
+  // 初始置空，挂载后确认是大屏才选中第一题，避免水合不一致。
   const [openId, setOpenId] = useState<string | null>(null);
   const [favPending, setFavPending] = useState<Set<string>>(new Set());
   // 乐观更新：点击后立刻反馈，请求失败再回滚
   const [favOverride, setFavOverride] = useState<Record<string, boolean>>({});
+  const answerRef = useRef<HTMLDivElement>(null);
+  const [catOpen, setCatOpen] = useState(false);
 
-  function navigate(next: {
-    q?: string;
-    c?: string;
-    f?: boolean;
-    p?: number;
-  }) {
+  const selected = items.find((it) => it.id === openId) ?? null;
+
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1280px)");
+    if (mq.matches && items[0]) setOpenId(items[0].id);
+    const onChange = (e: MediaQueryListEvent) => {
+      if (e.matches) setOpenId((cur) => cur ?? items[0]?.id ?? null);
+    };
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, [items]);
+
+  // 换题时答案面板回到顶部，否则长答案会停在上一条的滚动位置
+  useEffect(() => {
+    answerRef.current?.scrollTo({ top: 0 });
+  }, [openId]);
+
+  function navigate(next: { q?: string; c?: string; f?: boolean; p?: number }) {
     const params = new URLSearchParams();
     const q = next.q ?? keyword;
     const c = next.c ?? category;
@@ -91,20 +107,62 @@ export function PoolBrowser({
 
   const activeCategory = category || "全部";
 
-  // details 的 open 是属性不是类，lg:open 无效，会导致桌面端也折叠。
-  // 改为：桌面默认展开且不可折叠；小屏可折叠。
-  const [catOpen, setCatOpen] = useState(false);
+  // 分类导航在 xl 以上常驻左栏；lg 时让出宽度给答案面板，折叠到列表上方
+  const categoryNav = (
+    <nav className="border-t border-neutral-100">
+      <SidebarItem
+        label="全部题目"
+        count={total}
+        active={activeCategory === "全部" && !favoritesOnly}
+        onClick={() => navigate({ c: "", f: false, p: 0 })}
+      />
+      <SidebarItem
+        label="★ 收藏"
+        count={favoriteCount}
+        active={favoritesOnly}
+        tone="amber"
+        onClick={() => navigate({ f: !favoritesOnly, p: 0 })}
+      />
+      <div className="border-t border-neutral-100" />
+      {categories.map((c) => (
+        <SidebarItem
+          key={c.name}
+          label={c.name}
+          count={c.count}
+          active={activeCategory === c.name && !favoritesOnly}
+          onClick={() => navigate({ c: c.name, f: false, p: 0 })}
+        />
+      ))}
+    </nav>
+  );
 
   return (
-    <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-      {/* 左栏：分类导航。小屏折叠成一行，大屏始终展开 */}
-      <aside className="lg:sticky lg:top-4 lg:w-56 lg:shrink-0">
+    <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
+      {/* xl 以上：左栏常驻 */}
+      <aside className="hidden xl:sticky xl:top-4 xl:block xl:w-52 xl:shrink-0">
         <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
+          <div className="flex items-center justify-between px-3 py-2.5 text-sm font-medium">
+            <span>
+              分类
+              <span className="ml-1.5 text-xs font-normal text-neutral-500">
+                {favoritesOnly ? "收藏" : activeCategory} · {filteredCount} 道
+              </span>
+            </span>
+          </div>
+          {categoryNav}
+        </div>
+        {pending && <p className="mt-2 px-1 text-xs text-neutral-400">加载中…</p>}
+      </aside>
+
+      {/* 右侧：检索 + 题目列表 + 答案面板 */}
+      <div className="min-w-0 flex-1 space-y-3">
+        {/* xl 以下：分类折叠成一行 */}
+        <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white xl:hidden">
           <button
             type="button"
             onClick={() => setCatOpen((v) => !v)}
             aria-expanded={catOpen}
-            className="flex w-full items-center justify-between px-3 py-2.5 text-sm font-medium hover:bg-neutral-50 lg:cursor-default lg:hover:bg-transparent"
+            className="flex w-full items-center justify-between px-3 py-2.5 text-sm font-medium hover:bg-neutral-50"
           >
             <span>
               分类
@@ -112,45 +170,12 @@ export function PoolBrowser({
                 {favoritesOnly ? "收藏" : activeCategory} · {filteredCount} 道
               </span>
             </span>
-            <span className="text-xs text-neutral-400 lg:hidden">
+            <span className="text-xs text-neutral-400">
               {catOpen ? "收起" : "展开"}
             </span>
           </button>
-          <nav
-            className={`${catOpen ? "block" : "hidden"} border-t border-neutral-100 lg:block`}
-          >
-            <SidebarItem
-              label="全部题目"
-              count={total}
-              active={activeCategory === "全部" && !favoritesOnly}
-              onClick={() => navigate({ c: "", f: false, p: 0 })}
-            />
-            <SidebarItem
-              label="★ 收藏"
-              count={favoriteCount}
-              active={favoritesOnly}
-              tone="amber"
-              onClick={() => navigate({ f: !favoritesOnly, p: 0 })}
-            />
-            <div className="border-t border-neutral-100" />
-            {categories.map((c) => (
-              <SidebarItem
-                key={c.name}
-                label={c.name}
-                count={c.count}
-                active={activeCategory === c.name && !favoritesOnly}
-                onClick={() => navigate({ c: c.name, f: false, p: 0 })}
-              />
-            ))}
-          </nav>
+          {catOpen && categoryNav}
         </div>
-        {pending && (
-          <p className="mt-2 px-1 text-xs text-neutral-400">加载中…</p>
-        )}
-      </aside>
-
-      {/* 右栏：检索与题目列表 */}
-      <div className="min-w-0 flex-1 space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <input
             value={draft}
@@ -159,7 +184,7 @@ export function PoolBrowser({
               if (e.key === "Enter") navigate({ q: draft, p: 0 });
             }}
             placeholder="搜索题目、标签或答案"
-            className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm sm:w-80"
+            className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm sm:w-72"
           />
           <button
             onClick={() => navigate({ q: draft, p: 0 })}
@@ -169,103 +194,172 @@ export function PoolBrowser({
           </button>
           {(keyword || category || favoritesOnly) && (
             <button
-              onClick={() =>
-                navigate({ q: "", c: "", f: false, p: 0 })
-              }
+              onClick={() => navigate({ q: "", c: "", f: false, p: 0 })}
               className="text-xs text-neutral-500 underline hover:text-neutral-800"
             >
               清除筛选
             </button>
           )}
-          <span className="ml-auto text-xs text-neutral-500">
-            {filteredCount} 道
-          </span>
+          <span className="ml-auto text-xs text-neutral-500">{filteredCount} 道</span>
         </div>
 
-        <div className="divide-y divide-neutral-100 overflow-hidden rounded-lg border border-neutral-200 bg-white">
-          {items.map((it) => {
-            const open = openId === it.id;
-            const fav = favOverride[it.id] ?? it.favorite;
-            return (
-              <div key={it.id}>
-                <div className="flex items-start gap-2 px-4 py-3 hover:bg-neutral-50">
-                  <button
-                    onClick={() => toggleFavorite(it)}
-                    disabled={favPending.has(it.id)}
-                    aria-label={fav ? "取消收藏" : "收藏"}
-                    aria-pressed={fav}
-                    // 点击目标按 44×44 的触摸标准做内边距，视觉上仍是小星标
-                    className={`-m-2 mt-0 shrink-0 rounded p-2 text-base leading-none transition-colors ${
-                      fav
-                        ? "text-amber-500 hover:bg-amber-50 hover:text-amber-600"
-                        : "text-neutral-300 hover:bg-neutral-100 hover:text-amber-400"
-                    } disabled:opacity-50`}
-                  >
-                    {fav ? "★" : "☆"}
-                  </button>
+        <div className="xl:flex xl:items-start xl:gap-4">
+          {/* 题目列表：大屏固定宽度，答案在右栏 */}
+          <div className="min-w-0 xl:w-[360px] xl:shrink-0">
+            <div className="divide-y divide-neutral-100 overflow-hidden rounded-lg border border-neutral-200 bg-white">
+              {items.map((it) => {
+                const active = openId === it.id;
+                const fav = favOverride[it.id] ?? it.favorite;
+                return (
+                  <div key={it.id}>
+                    <div
+                      className={`flex items-start gap-1 border-l-[3px] px-2.5 py-2.5 transition-colors ${
+                        active
+                          ? "border-emerald-600 bg-emerald-50/70"
+                          : "border-transparent hover:bg-neutral-50"
+                      }`}
+                    >
+                      <button
+                        onClick={() => toggleFavorite(it)}
+                        disabled={favPending.has(it.id)}
+                        aria-label={fav ? "取消收藏" : "收藏"}
+                        aria-pressed={fav}
+                        className={`-ml-1.5 -mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded text-sm leading-none transition-colors ${
+                          fav
+                            ? "text-amber-500 hover:bg-amber-50"
+                            : "text-neutral-300 hover:bg-neutral-100 hover:text-amber-400"
+                        } disabled:opacity-50`}
+                      >
+                        {fav ? "★" : "☆"}
+                      </button>
 
-                  <button
-                    onClick={() => setOpenId(open ? null : it.id)}
-                    className="min-w-0 flex-1 text-left"
-                  >
-                    <p className="text-sm leading-relaxed">{it.question}</p>
-                    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-neutral-400">
+                      <button
+                        onClick={() => setOpenId(active ? null : it.id)}
+                        aria-current={active ? "true" : undefined}
+                        className="min-w-0 flex-1 text-left"
+                      >
+                        <p
+                          className={`text-[13px] leading-relaxed ${
+                            active ? "font-medium text-emerald-900" : "text-neutral-800"
+                          }`}
+                        >
+                          {it.question}
+                        </p>
+                        <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] text-neutral-400">
+                          <span>{it.category}</span>
+                          <span>·</span>
+                          <span>难度 {it.difficulty}</span>
+                          {it.duplicates > 0 && (
+                            <>
+                              <span>·</span>
+                              <span className="text-amber-600">
+                                {it.duplicates + 1} 份收录
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </button>
+                    </div>
+
+                    {/* 小屏：答案就地展开。大屏由右栏承担，这里藏起来 */}
+                    {active && (
+                      <div className="border-t border-emerald-100 bg-neutral-50/80 px-3 py-3 xl:hidden">
+                        <AnswerBody text={it.answer} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              {items.length === 0 && (
+                <p className="px-4 py-12 text-center text-sm text-neutral-500">
+                  没有匹配的题目
+                </p>
+              )}
+            </div>
+
+            {pageCount > 1 && (
+              <div className="mt-3 flex items-center justify-center gap-2">
+                <button
+                  onClick={() => navigate({ p: Math.max(0, page - 1) })}
+                  disabled={page === 0 || pending}
+                  className="rounded-md border border-neutral-300 px-2.5 py-1 text-xs disabled:opacity-40"
+                >
+                  上一页
+                </button>
+                <span className="text-xs text-neutral-600">
+                  {page + 1} / {pageCount}
+                </span>
+                <button
+                  onClick={() => navigate({ p: Math.min(pageCount - 1, page + 1) })}
+                  disabled={page >= pageCount - 1 || pending}
+                  className="rounded-md border border-neutral-300 px-2.5 py-1 text-xs disabled:opacity-40"
+                >
+                  下一页
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* 右栏：选中题目的答案。大屏常驻，小屏隐藏 */}
+          <div className="hidden min-w-0 flex-1 xl:sticky xl:top-4 xl:block">
+            <div
+              ref={answerRef}
+              className="overflow-hidden rounded-lg border border-neutral-200 bg-white xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto"
+            >
+              {selected ? (
+                <>
+                  <div className="border-b border-neutral-200 px-4 py-3">
+                    <div className="flex items-start gap-2">
+                      <p className="min-w-0 flex-1 text-[13.5px] font-semibold leading-relaxed text-neutral-900">
+                        {selected.question}
+                      </p>
+                      <button
+                        onClick={() => toggleFavorite(selected)}
+                        disabled={favPending.has(selected.id)}
+                        aria-label={
+                          (favOverride[selected.id] ?? selected.favorite)
+                            ? "取消收藏"
+                            : "收藏"
+                        }
+                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded text-sm leading-none ${
+                          (favOverride[selected.id] ?? selected.favorite)
+                            ? "text-amber-500 hover:bg-amber-50"
+                            : "text-neutral-300 hover:bg-neutral-100 hover:text-amber-400"
+                        } disabled:opacity-50`}
+                      >
+                        {(favOverride[selected.id] ?? selected.favorite) ? "★" : "☆"}
+                      </button>
+                    </div>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-neutral-400">
                       <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-neutral-600">
-                        {it.category}
+                        {selected.category}
                       </span>
-                      <span>难度 {it.difficulty}</span>
-                      {it.duplicates > 0 && (
+                      <span>难度 {selected.difficulty}</span>
+                      {selected.duplicates > 0 && (
                         <span className="text-amber-600">
-                          被 {it.duplicates + 1} 份题集收录
+                          {selected.duplicates + 1} 份题集收录
                         </span>
                       )}
-                      {it.tags.slice(0, 4).map((t) => (
+                      {selected.tags.slice(0, 5).map((t) => (
                         <span key={t}>#{t}</span>
                       ))}
                     </div>
-                  </button>
-
-                  <span className="mt-0.5 shrink-0 text-xs text-neutral-300">
-                    {open ? "收起" : "展开"}
-                  </span>
-                </div>
-
-                {open && (
-                  <div className="border-t border-neutral-100 bg-neutral-50 px-4 py-4 pl-11">
-                    <AnswerBody text={it.answer} />
                   </div>
-                )}
-              </div>
-            );
-          })}
-          {items.length === 0 && (
-            <p className="px-4 py-12 text-center text-sm text-neutral-500">
-              没有匹配的题目
-            </p>
-          )}
-        </div>
-
-        {pageCount > 1 && (
-          <div className="flex items-center justify-center gap-2 pt-1">
-            <button
-              onClick={() => navigate({ p: Math.max(0, page - 1) })}
-              disabled={page === 0 || pending}
-              className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm disabled:opacity-40"
-            >
-              上一页
-            </button>
-            <span className="text-sm text-neutral-600">
-              {page + 1} / {pageCount}
-            </span>
-            <button
-              onClick={() => navigate({ p: Math.min(pageCount - 1, page + 1) })}
-              disabled={page >= pageCount - 1 || pending}
-              className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm disabled:opacity-40"
-            >
-              下一页
-            </button>
+                  <div className="px-4 py-3.5">
+                    <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-neutral-400">
+                      答案
+                    </div>
+                    <AnswerBody text={selected.answer} />
+                  </div>
+                </>
+              ) : (
+                <div className="px-4 py-16 text-center text-sm text-neutral-400">
+                  点击左侧题目查看答案
+                </div>
+              )}
+            </div>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
@@ -292,7 +386,7 @@ function SidebarItem({
     <button
       onClick={onClick}
       aria-current={active ? "true" : undefined}
-      className={`flex w-full items-center justify-between border-l-[3px] px-3 py-2 text-left text-sm transition-colors ${
+      className={`flex w-full items-center justify-between border-l-[3px] px-3 py-1.5 text-left text-[13px] transition-colors ${
         active
           ? `${activeCls} font-medium`
           : "border-transparent text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900"
@@ -300,7 +394,7 @@ function SidebarItem({
     >
       <span className="truncate">{label}</span>
       <span
-        className={`ml-2 shrink-0 text-xs tabular-nums ${
+        className={`ml-2 shrink-0 text-[11px] tabular-nums ${
           active ? "opacity-70" : "text-neutral-400"
         }`}
       >
