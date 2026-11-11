@@ -32,6 +32,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -39,3 +40,19 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# app data (SQLite + 上传的简历)
+/data
+
+# 第三方面试题 PDF（体积大且有版权，不入库；放到该目录后运行导入脚本）
+/参考面试题
+
+# UI 检查截图
+/ui-shots
+
+# 题库导入中间产物
+/data/pool-stage
+/data/pdftext
+
+# next dev 自动生成的过程记录，每次启动会重建
+/AGENTS.md

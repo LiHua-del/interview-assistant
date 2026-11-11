@@ -1,36 +1,118 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 面试辅助
 
-## Getting Started
+面向**面试官**的本地 AI 面试辅助工具。上传简历生成个性化面试题，面试后上传纪要得到评估报告。
 
-First, run the development server:
+## 它解决什么问题
+
+市面上的面试工具大多面向求职者（押题、包装简历）。这个工具反过来，站在筛选方：
+
+1. **出题**：以候选人简历里实际写到的技术点为轴，结合岗位 JD 决定深度，生成能验真的面试题
+2. **复盘**：上传面试纪要，评估候选人表现，同时反评面试官的提问质量
+
+## 核心设计
+
+### 出题主轴是简历技术点，不是 JD
+
+每道题都锚定在「场景 × 技术点」上。反例是「请说说 Redis 持久化机制」——通用八股，看不出是否真做过。正例是「你在字节的优惠券项目里用 Redis 预扣减库存，RDB 和 AOF 你们选了哪个？为什么？」
+
+技术点会标注简历对它的描述深度（一句话带过 / 有方案描述 / 有实现细节 / 有量化结果）和候选人在其中的角色，这决定了追问从哪里开始。
+
+### 防幻觉的硬约束
+
+- 每道题必须带 `resumeAnchor`，内容是简历原文的连续片段，检索不到就丢弃
+- 复盘报告的每条结论必须引用纪要原文，定位不到的标记为「待核实」
+- 覆盖率、命中率这类指标由本地确定性计算，不交给模型
+
+### 风险扫描
+
+上传简历后自动检测六类破绽：时间线异常、技术栈穿越、指标不可信、角色夸大、深度不匹配、技能堆砌。高危项会直接变成必问题。
+
+### 复盘区分「人不行」和「没问到」
+
+失分项必须归因到：真不会 / 没问到 / 问偏了 / 时间不够。这个区分直接决定筛选结论可不可信。
+
+## 快速开始
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+# 1. 安装依赖
+pnpm install
+
+# 2. 配置 LLM（任意 OpenAI 兼容接口）
+cp .env.example .env.local
+# 编辑 .env.local，填入 LLM_BASE_URL / LLM_API_KEY / LLM_MODEL
+
+# 3. 初始化数据库
+pnpm exec drizzle-kit migrate
+
+# 4. 启动
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+打开 http://localhost:3000
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 使用流程
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. **岗位** → 新建岗位，填 JD。题数配置有默认值（必问 6 / 选问 14 / 备用 5）
+2. **候选人** → 上传简历（PDF 文字版或 Markdown），自动解析并做风险扫描
+3. 候选人详情页 → **出题**，选岗位后生成（约 5 分钟，每题要补多层追问）
+4. 候选人详情页 → **面试复盘**，粘贴文字纪要
 
-## Learn More
+> 扫描版 PDF（整页是图片）不支持，会明确报错。本项目不做 OCR。
 
-To learn more about Next.js, take a look at the following resources:
+## 题库导入（可选）
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+离线题库用于给模型提供「这个技术点通常从哪些角度考」的参照。不导入也能用，出题会纯靠 LLM。
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+题库不在本仓库内（体积大且为第三方出版物）。自行准备 PDF 放到 `参考面试题/` 目录后：
 
-## Deploy on Vercel
+```bash
+LLM_API_KEY=你的key node scripts/import-pool.mjs
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+流水线会依次做：文本抽取 → 清洗 → 切题 → 字体缺字修复 → LLM 归类打标 → 语义去重 → 入库。
+中间产物在 `data/pool-stage/`，可断点续跑。
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 技术栈
+
+| 项 | 选择 |
+|---|---|
+| 框架 | Next.js 16 (App Router) + TypeScript |
+| 样式 | Tailwind 4 |
+| 数据库 | SQLite + Drizzle ORM |
+| PDF 解析 | pdfjs-dist（仅文本层） |
+| LLM | 任意 OpenAI 兼容接口 |
+
+## 目录结构
+
+```
+src/
+├── app/                    页面与 API
+│   ├── candidates/         候选人列表 / 详情 / 面试工作台 / 轮次复盘
+│   ├── jobs/               岗位
+│   ├── pool/               题库
+│   └── api/                出题、复盘、解析、收藏等接口
+├── components/
+├── lib/
+│   ├── analysis/           风险扫描、技术点提取
+│   ├── questions/          出题、追问补全、题数配平
+│   ├── review/             复盘、确定性指标计算
+│   ├── pool/               题库导入流水线
+│   ├── resume/             简历解析
+│   └── prompts/            全部 prompt 模板
+scripts/import-pool.mjs     题库导入
+REQUIREMENTS.md             完整需求文档
+```
+
+## 数据与隐私
+
+所有数据存本地 `data/` 目录（SQLite + 上传的简历），不上传任何第三方服务，除了你配置的 LLM 接口。
+
+`data/`、`.env.local`、题库 PDF 均已在 `.gitignore` 中排除。
+
+## 定位说明
+
+评估报告由 AI 生成，**仅作辅助参考，不能作为唯一筛选依据**。产品内已标注此提示。
+
+## 详细文档
+
+完整需求、设计决策、已知限制见 [REQUIREMENTS.md](./REQUIREMENTS.md)。

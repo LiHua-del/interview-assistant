@@ -1,69 +1,131 @@
-import Image from "next/image";
+import Link from "next/link";
+import { db } from "@/lib/db";
+import { jobs, candidates, rounds, reviews } from "@/lib/db/schema";
+import { Card, Stat, Empty, SectionTitle, Badge } from "@/components/ui";
+
+export const dynamic = "force-dynamic";
 
 export default function Home() {
+  const allJobs = db.select().from(jobs).all();
+  const allCandidates = db.select().from(candidates).all();
+  const allRounds = db.select().from(rounds).all();
+  const allReviews = db.select().from(reviews).all();
+
+  const byStatus = allCandidates.reduce<Record<string, number>>((acc, c) => {
+    acc[c.status] = (acc[c.status] ?? 0) + 1;
+    return acc;
+  }, {});
+
+  const verdicts = allReviews.reduce<Record<string, number>>((acc, r) => {
+    acc[r.verdict] = (acc[r.verdict] ?? 0) + 1;
+    return acc;
+  }, {});
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">概览</h1>
+        <p className="mt-1 text-sm text-neutral-500">
+          简历出题 · 面试复盘 · 候选人归档
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Link href="/jobs" aria-label="查看岗位列表" className="rounded-lg transition-shadow hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700">
+          <Stat label="岗位" value={allJobs.length} hint="查看岗位 →" />
+        </Link>
+        <Link href="/candidates" aria-label="查看候选人列表" className="rounded-lg transition-shadow hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700">
+          <Stat label="候选人" value={allCandidates.length} hint="查看候选人 →" />
+        </Link>
+        <Stat label="面试轮次" value={allRounds.length} />
+        <Stat label="已出评估" value={allReviews.length} />
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-6">
+        <Card>
+          <SectionTitle hint="按当前状态统计">候选人状态</SectionTitle>
+          {Object.keys(byStatus).length === 0 ? (
+            <p className="text-sm text-neutral-500">暂无候选人</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(byStatus).map(([k, v]) => (
+                <span key={k} className="text-sm">
+                  <Badge tone={statusTone(k)}>
+                    {k} {v}
+                  </Badge>
+                </span>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        <Card>
+          <SectionTitle hint="AI 结论分布，仅供参考">筛选结论</SectionTitle>
+          {Object.keys(verdicts).length === 0 ? (
+            <p className="text-sm text-neutral-500">暂无评估结果</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(verdicts).map(([k, v]) => (
+                <Badge key={k} tone={verdictTone(k)}>
+                  {k} {v}
+                </Badge>
+              ))}
+            </div>
+          )}
+        </Card>
+      </div>
+
+      <div>
+        <SectionTitle>最近候选人</SectionTitle>
+        {allCandidates.length === 0 ? (
+          <Empty>
+            还没有候选人。
+            <Link href="/candidates" className="underline ml-1">
+              去添加
+            </Link>
+          </Empty>
+        ) : (
+          <div className="divide-y divide-neutral-200 rounded-lg border border-neutral-200 bg-white">
+            {[...allCandidates]
+              .sort((a, b) => b.createdAt - a.createdAt)
+              .slice(0, 6)
+              .map((c) => (
+                <Link
+                  key={c.id}
+                  href={`/candidates/${c.id}`}
+                  className="flex items-center justify-between px-5 py-3 hover:bg-neutral-50"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="font-medium">{c.name}</span>
+                    <Badge tone={statusTone(c.status)}>{c.status}</Badge>
+                    {c.riskReport.some((r) => r.severity === "高") && (
+                      <Badge tone="red">
+                        高危可疑点 {c.riskReport.filter((r) => r.severity === "高").length}
+                      </Badge>
+                    )}
+                  </div>
+                  <span className="text-xs text-neutral-400">
+                    {new Date(c.createdAt * 1000).toLocaleDateString("zh-CN")}
+                  </span>
+                </Link>
+              ))}
+          </div>
+        )}
+      </div>
     </div>
   );
+}
+
+function statusTone(s: string) {
+  if (s.includes("通过") || s.includes("offer")) return "green" as const;
+  if (s.includes("拒")) return "red" as const;
+  if (s.includes("待定") || s.includes("待复盘")) return "amber" as const;
+  return "neutral" as const;
+}
+
+function verdictTone(v: string) {
+  if (v.includes("强烈")) return "green" as const;
+  if (v.includes("不推荐")) return "red" as const;
+  if (v.includes("待定")) return "amber" as const;
+  return "blue" as const;
 }
