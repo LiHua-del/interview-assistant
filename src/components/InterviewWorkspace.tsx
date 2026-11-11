@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { SplitView } from "@/components/SplitView";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState, useTransition } from "react";
 import type { InterviewQuestion } from "@/lib/db/schema";
@@ -98,7 +99,16 @@ export function InterviewWorkspace({ candidate, document, questions, expectedLev
         {pending && <span role="status">正在切换题单…</span>}
       </label>}
     </div>
-    <div className="interview-columns">
+    <SplitView
+      stackBelow="md"
+      storageKey="interview-split"
+      className="interview-columns"
+      panes={[
+        {
+          key: "resume",
+          initial: 47,
+          min: 20,
+          content: (
       <section className="interview-pane resume-pane" aria-label="候选人简历">
         <div className="interview-pane-heading"><h2>候选人简历</h2><div className="interview-links">
           <a href={`/api/candidates/${candidate.id}/resume?format=markdown`} download>下载 Markdown</a>
@@ -115,6 +125,13 @@ export function InterviewWorkspace({ candidate, document, questions, expectedLev
           </div>)}
         </div>
       </section>
+          ),
+        },
+        {
+          key: "questions",
+          initial: 53,
+          min: 25,
+          content: (
       <section className="interview-pane questions-pane" aria-label="面试题">
         <div className="interview-pane-heading"><h2>面试题 <span>{questions.length}</span></h2><span className="interview-hint">悬停对照 · 点击固定并定位</span></div>
         <div className="interview-filters" aria-label="题目优先级">{(["全部", "必问", "选问", "备用"] as const).map((value) => <button type="button" key={value} aria-pressed={filter === value} onClick={() => {
@@ -138,7 +155,10 @@ export function InterviewWorkspace({ candidate, document, questions, expectedLev
           </article>)}
         </div>
       </section>
-    </div>
+          ),
+        },
+      ]}
+    />
     <div className="interview-footer"><span>悬停不移动页面；点击题目才定位原文。高亮仅表示引用关联。</span><span aria-live="polite">{selected >= 0 && questions[selected] ? `已固定第 ${selected + 1} 题 · ${linkStatus(selected)}` : "未选中题目"}</span></div>
   </div>;
 }

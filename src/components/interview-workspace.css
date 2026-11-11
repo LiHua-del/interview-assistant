@@ -1,20 +1,24 @@
 main:has(.interview-page) { max-width: none; padding: 18px 24px; }
 .interview-page { display: flex; flex-direction: column; height: calc(100dvh - 92px); min-height: 460px; color: #243831; }
 .interview-topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 16px; flex-wrap: wrap; }
-.interview-back { color: #65756e; font-size: 13px; }
+.interview-back { display: inline-flex; align-items: center; min-height: 36px; padding: 0 4px; margin: -8px 0; color: #65756e; font-size: 13px; }
 .interview-back:hover { text-decoration: underline; }
 .interview-topbar h1 { font-size: 22px; font-weight: 600; margin-top: 5px; }
 .interview-topbar h1 span { margin-left: 12px; font-size: 13px; font-weight: 400; color: #65756e; }
 .interview-set-label { display: grid; gap: 4px; font-size: 12px; color: #65756e; max-width: 100%; }
 .interview-set-label select { padding: 8px 10px; background: white; border: 1px solid #d5e0da; border-radius: 6px; color: #243831; max-width: 480px; width: 100%; }
-.interview-columns { display: grid; grid-template-columns: minmax(0, 47fr) minmax(0, 53fr); flex: 1; min-height: 0; border: 1px solid #d8e3dd; border-radius: 10px; overflow: hidden; background: white; }
+/* 栏宽由 SplitView 的 flex-basis 控制，这里不再设 grid-template-columns */
+.interview-columns { flex: 1; min-height: 0; border: 1px solid #d8e3dd; border-radius: 10px; overflow: hidden; background: white; }
+/* 窄屏堆叠时，两栏需要各自可滚 */
+.interview-columns > div { min-width: 0; }
 .interview-pane { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 .resume-pane { border-right: 1px solid #d8e3dd; }
 .questions-pane { background: #f3f6f4; }
 .interview-pane-heading { min-height: 57px; padding: 14px 20px; display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: center; border-bottom: 1px solid #d8e3dd; }
 .interview-pane-heading h2 { font-weight: 600; font-size: 15px; }
 .interview-pane-heading h2 span { font-size: 12px; color: #65756e; margin-left: 5px; }
-.interview-links { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: #116951; }
+.interview-links { display: flex; gap: 4px; flex-wrap: wrap; font-size: 12px; color: #116951; }
+.interview-links a { display: inline-flex; align-items: center; min-height: 36px; padding: 0 6px; margin: -10px -6px; }
 .interview-links a:hover { text-decoration: underline; }
 .interview-scroll { overflow-y: auto; overscroll-behavior: contain; min-height: 0; flex: 1; scrollbar-gutter: stable; }
 .resume-content { padding: 22px 28px 40px; font-size: 15px; line-height: 1.9; overflow-wrap: anywhere; }
@@ -48,9 +52,9 @@ main:has(.interview-page) { max-width: none; padding: 18px 24px; }
 .interview-empty { padding: 24px 10px; color: #65756e; font-size: 14px; }
 .interview-empty a { color: #116951; display: inline-block; margin-top: 12px; text-decoration: underline; }
 @media (max-width: 767px) {
+  .interview-page { height: auto; }
   main:has(.interview-page) { padding: 14px 12px; }
   .interview-page { height: auto; min-height: 0; }
-  .interview-columns { grid-template-columns: minmax(0,1fr); }
   .resume-pane { border-right: 0; border-bottom: 1px solid #d8e3dd; }
   .interview-scroll { max-height: 65dvh; flex: auto; }
   .resume-content { padding: 18px; }
