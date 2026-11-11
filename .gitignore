@@ -54,5 +54,7 @@ next-env.d.ts
 /data/pool-stage
 /data/pdftext
 
-# next dev 自动生成的过程记录，每次启动会重建
+# 开发过程记录与本地验证脚本：保留在本地，不纳入版本控制
 /AGENTS.md
+/CLAUDE.md
+/scripts/check-question-set-delete.mjs
