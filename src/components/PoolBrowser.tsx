@@ -2,7 +2,6 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Badge } from "@/components/ui";
 import { AnswerBody } from "@/components/AnswerBody";
 
 type Item = {
