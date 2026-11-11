@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui";
+import { AnswerBody } from "@/components/AnswerBody";
 
 type Item = {
   id: string;
@@ -231,10 +232,8 @@ export function PoolBrowser({
                 </div>
 
                 {open && (
-                  <div className="border-t border-neutral-100 bg-neutral-50 px-4 py-3 pl-11">
-                    <p className="prose-block whitespace-pre-wrap text-sm leading-relaxed text-neutral-700">
-                      {it.answer}
-                    </p>
+                  <div className="border-t border-neutral-100 bg-neutral-50 px-4 py-4 pl-11">
+                    <AnswerBody text={it.answer} />
                   </div>
                 )}
               </div>

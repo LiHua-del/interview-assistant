@@ -248,6 +248,66 @@ function containment(a, b) { if (!a.size || !b.size) return 0; const [s, l] = a.
 // 同一问题的增补式改写（如"…哪几种锁？" vs "…哪几种锁，列举一下？"）
 function isDup(a, b) { return sim(a, b) >= 0.62 || containment(a, b) >= 0.85; }
 
+// ---- 答案排版清洗（与 src/lib/pool/format.ts 同规则）----
+
+const CJK_RE = /[一-鿿]/;
+const CJK_PUNCT_RE = /[，。、；：？！（）「」『』《》…—]/;
+const SENTENCE_END_RE = /[。！？；：]$/;
+
+function cleanAnswerText(raw) {
+  let t = raw.replace(/\r\n/g, "\n");
+  // Powerpoint 字体的项目符号落在私用区
+  t = t.replace(/[\uE000-\uF8FF]/g, "•");
+  // 去掉单独成行的章节号
+  t = t
+    .split("\n")
+    .filter((line) => !/^\d{1,2}(?:\.\d{1,2}){1,3}\.?$/.test(line.trim()))
+    .map((line) => {
+      const m = line.match(/^(\s*)\d{1,2}(?:\.\d{1,2}){1,3}\.?\s+(\S.*)$/);
+      return m && m[2].length >= 2 ? m[1] + m[2] : line;
+    })
+    .join("\n");
+  // 合并版面硬换行（跑两遍处理三行连成一句）
+  for (let k = 0; k < 2; k++) t = mergeWraps(t);
+  // 规范中文空格
+  let prev = "";
+  while (prev !== t) {
+    prev = t;
+    t = t
+      .replace(/([一-鿿])[ \t]+(?=[一-鿿])/g, "$1")
+      .replace(/([一-鿿])[ \t]+(?=[，。、；：？！（）「」『』《》…—])/g, "$1")
+      .replace(/([，。、；：？！（）「」『』《》…—])[ \t]+(?=[一-鿿])/g, "$1");
+  }
+  return t.replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function mergeWraps(text) {
+  const lines = text.split("\n");
+  const out = [];
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) { out.push(""); continue; }
+    const prevLine = out[out.length - 1];
+    const canMerge =
+      prevLine !== undefined && prevLine !== "" &&
+      prevLine.length >= 12 &&
+      !SENTENCE_END_RE.test(prevLine) &&
+      (CJK_RE.test(prevLine.slice(-1)) || CJK_PUNCT_RE.test(prevLine.slice(-1))) &&
+      CJK_RE.test(line[0]) &&
+      !/^(\d+[.、)]|[-·•*]|[（(]\d+[)）])\s*/.test(line) &&
+      !/[{};]\s*$/.test(prevLine) &&
+      !/^(public|private|protected|static|class|interface|enum|abstract|package|import|@|\/\/|\/\*)/.test(line);
+    if (canMerge) {
+      const last = prevLine.slice(-1), first = line[0];
+      const space = !CJK_RE.test(last) && !CJK_PUNCT_RE.test(last) && !CJK_PUNCT_RE.test(first) ? " " : "";
+      out[out.length - 1] = prevLine + space + line;
+    } else {
+      out.push(line);
+    }
+  }
+  return out.join("\n");
+}
+
 function dedupe(items) {
   const sorted = [...items].sort((a, b) => (b.answer.length + b.question.length) - (a.answer.length + a.question.length));
   const buckets = new Map();
@@ -359,7 +419,14 @@ async function main() {
     }
   }
 
-  // 4. 去重
+  // 4. 清洗答案排版（合并版面硬换行、规范空格、转项目符号）
+  // 与 src/lib/pool/format.ts 的 cleanAnswer 保持一致
+  for (const q of all) {
+    if (q.answer) q.answer = cleanAnswerText(q.answer);
+  }
+  console.log("答案排版清洗完成");
+
+  // 5. 去重
   const items = all
     .filter((q) => q.category)
     .map((q) => ({
