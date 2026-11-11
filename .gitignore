@@ -52,6 +52,8 @@ next-env.d.ts
 
 # 题库导入中间产物
 /data/pool-stage
+/data/regen-stage
+/backup
 /data/pdftext
 
 # 开发过程记录与本地验证脚本：保留在本地，不纳入版本控制
