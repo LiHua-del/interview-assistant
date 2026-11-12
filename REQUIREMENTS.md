@@ -674,6 +674,30 @@ interview-assistant/
 原先用 CSS Grid 固定 `47fr 53fr`，改为 flex 后由 `SplitView` 接管栏宽；
 `.interview-columns` 不再设 `grid-template-columns`。低于 768px 竖向堆叠。
 
+## 13.9 三栏独立滚动（2026-11-12）
+
+题目列表长到几十条时，滚到中段选中题目，答案面板已经滚出视口，还得往回翻。
+
+根因不是 CSS 写错：答案栏用了 `xl:sticky xl:top-0`，`getComputedStyle` 里
+`position` 确实是 `sticky`，但它与父容器同高（两者都由内容撑开），
+**可粘附的余量为 0**，滚动时整块一起走。
+
+改为三栏各自定高、内部独立滚动：
+
+```
+分类栏  h = calc(100vh - 13rem)   内部滚动
+列表栏  h = 同上  搜索框固定顶部、分页固定底部，列表区 flex-1 滚动
+答案栏  h = 同上  标题栏固定顶部，正文区 flex-1 滚动
+```
+
+`13rem` 的构成：header 57px + main 上下 padding 64px + 标题区 72px + 余量。
+改这个值时用 1440×900 验证 `document.documentElement.scrollHeight === innerHeight`。
+
+低于 `xl` 不生效，回退为整页滚动——窄屏没有并排的两栏，也就不存在这个问题。
+
+实测：列表内部滚 2095px 时答案栏 `top` 恒为 161、`window.scrollY` 恒为 0；
+点第 19 题答案正确切换且内容回到顶部。
+
 ## 15. 题库答案重生成（2026-11-11）
 
 ### 15.1 问题定位
