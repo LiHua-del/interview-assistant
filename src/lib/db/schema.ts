@@ -125,6 +125,12 @@ export const questionsPool = sqliteTable(
     question: text("question").notNull(),
     /** 参考答案全文，来自 PDF */
     answer: text("answer").notNull().default(""),
+    /**
+     * 答案版本：0 = 导入时的原始 PDF 内容，1 = 用模型重生成过。
+     * 渲染时按此字段选解析器——旧答案的编号列表项长得和新答案的
+     * 小节标题极像，靠文本特征猜会有一批判错。
+     */
+    regenVersion: integer("regen_version").notNull().default(0),
     difficulty: integer("difficulty").notNull().default(3),
     source: text("source").notNull().default("manual"),
     /** 原始出处 PDF 的文件标识 */

@@ -93,6 +93,7 @@ export default async function PoolPage({ searchParams }: PageProps<"/pool">) {
           tags: r.tags,
           question: r.question,
           answer: r.answer,
+          regenVersion: r.regenVersion,
           difficulty: r.difficulty,
           duplicates: r.duplicates,
           favorite: r.favorite,

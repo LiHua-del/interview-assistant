@@ -195,7 +195,9 @@ if (!final.length) { console.error("没有可写入的结果"); process.exit(1);
 
 const wdb = new Database("data/app.db");
 wdb.pragma("journal_mode = WAL");
-const upd = wdb.prepare("update questions_pool set question = ?, answer = ? where id = ?");
+const upd = wdb.prepare(
+  "update questions_pool set question = ?, answer = ?, regen_version = 1 where id = ?",
+);
 const tx = wdb.transaction((list) => {
   for (const r of list) upd.run(r.question.slice(0, 500), r.answer, r.id);
 });

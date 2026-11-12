@@ -1,0 +1,1 @@
+ALTER TABLE `questions_pool` ADD `regen_version` integer DEFAULT 0 NOT NULL;

@@ -11,6 +11,8 @@ type Item = {
   tags: string[];
   question: string;
   answer: string;
+  /** 0 = 原始 PDF 内容，1 = 模型重生成过。决定答案用哪套解析器 */
+  regenVersion: number;
   difficulty: number;
   duplicates: number;
   favorite: boolean;
@@ -238,7 +240,7 @@ export function PoolBrowser({
               {/* 窄屏：答案就地展开。宽屏由右栏承担 */}
               {active && (
                 <div className="border-t border-emerald-100 bg-neutral-50/80 px-3 py-3 xl:hidden">
-                  <AnswerBody text={it.answer} />
+                  <AnswerBody text={it.answer} regenVersion={it.regenVersion} />
                 </div>
               )}
             </div>
@@ -325,7 +327,7 @@ export function PoolBrowser({
               <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-neutral-400">
                 答案
               </div>
-              <AnswerBody text={selected.answer} />
+              <AnswerBody text={selected.answer} regenVersion={selected.regenVersion} />
             </div>
           </>
         ) : (

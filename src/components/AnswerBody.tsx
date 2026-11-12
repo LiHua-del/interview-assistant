@@ -14,14 +14,21 @@ const COLLAPSE_CHARS = 1200;
 /**
  * 答案渲染。
  *
- * 新答案（模型重生成）有固定结构：一句结论 + 若干编号要点。
+ * 新答案（模型重生成，regenVersion=1）有固定结构：一句结论 + 若干编号要点。
  * 这里把结论做成独立强调块、要点做成带标题的小节，
  * 让读者先抓到一句话结论，再按需看细节。
  *
  * 旧答案没有结构，退回按内容识别段落/列表/代码渲染。
+ *
+ * 用 regenVersion 而不是文本特征判断：旧答案里的编号列表项
+ * （`1. 整个Redis数据库将只包含一个文件 dump.rdb`）和小节标题长得一样，
+ * 靠正则猜会把上百条旧答案错拆成标题。
  */
-export function AnswerBody({ text }: { text: string }) {
-  const structured = useMemo(() => hasSections(text), [text]);
+export function AnswerBody({ text, regenVersion }: { text: string; regenVersion: number }) {
+  const structured = useMemo(
+    () => regenVersion >= 1 && hasSections(text),
+    [text, regenVersion],
+  );
   return structured ? <StructuredAnswer text={text} /> : <PlainAnswer text={text} />;
 }
 
