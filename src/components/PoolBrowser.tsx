@@ -134,11 +134,11 @@ export function PoolBrowser({
     </nav>
   );
 
-  // 分类侧栏
+  // 分类侧栏。宽屏时自身滚动：三栏各自独立滚动，互不带走对方。
   const categoryPanel = (
-    <div className="xl:sticky xl:top-4">
-      <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
-        <div className="flex items-center justify-between px-3 py-2.5 text-sm font-medium">
+    <div className="xl:sticky xl:top-0 xl:flex xl:h-[calc(100vh-13rem)] xl:flex-col">
+      <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white xl:flex xl:min-h-0 xl:flex-1 xl:flex-col">
+        <div className="flex shrink-0 items-center justify-between px-3 py-2.5 text-sm font-medium">
           <span>
             分类
             <span className="ml-1.5 text-xs font-normal text-neutral-500">
@@ -146,16 +146,21 @@ export function PoolBrowser({
             </span>
           </span>
         </div>
-        {categoryNav}
+        <div className="xl:min-h-0 xl:flex-1 xl:overflow-y-auto">
+          {categoryNav}
+        </div>
       </div>
-      {pending && <p className="mt-2 px-1 text-xs text-neutral-400">加载中…</p>}
+      {pending && (
+        <p className="mt-2 shrink-0 px-1 text-xs text-neutral-400">加载中…</p>
+      )}
     </div>
   );
 
-  // 题目列表
+  // 题目列表。宽屏时搜索栏固定、列表自身滚动——否则翻到第 40 题时
+  // 答案栏早已滚出视口，选完还得往上翻。
   const listPanel = (
-    <div className="min-w-0 space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="min-w-0 xl:sticky xl:top-0 xl:flex xl:h-[calc(100vh-13rem)] xl:flex-col xl:space-y-0">
+      <div className="flex flex-wrap items-center gap-2 xl:shrink-0 xl:pb-3">
         <input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
@@ -182,7 +187,7 @@ export function PoolBrowser({
         <span className="ml-auto text-xs text-neutral-500">{filteredCount} 道</span>
       </div>
 
-      <div className="divide-y divide-neutral-100 overflow-hidden rounded-lg border border-neutral-200 bg-white">
+      <div className="divide-y divide-neutral-100 overflow-hidden rounded-lg border border-neutral-200 bg-white xl:min-h-0 xl:flex-1 xl:overflow-y-auto">
         {items.map((it) => {
           const active = effectiveOpenId === it.id;
           const fav = favOverride[it.id] ?? it.favorite;
@@ -254,7 +259,7 @@ export function PoolBrowser({
       </div>
 
       {pageCount > 1 && (
-        <div className="flex items-center justify-center gap-2">
+        <div className="flex items-center justify-center gap-2 xl:shrink-0 xl:pt-3">
           <button
             onClick={() => navigate({ p: Math.max(0, page - 1) })}
             disabled={page === 0 || pending}
@@ -277,16 +282,16 @@ export function PoolBrowser({
     </div>
   );
 
-  // 答案面板
+  // 答案面板。宽屏时固定视口高度、自身滚动，标题栏常驻顶部。
   const answerPanel = (
-    <div className="min-w-0 xl:sticky xl:top-4">
+    <div className="min-w-0 xl:sticky xl:top-0 xl:h-[calc(100vh-13rem)]">
       <div
         ref={answerRef}
-        className="overflow-hidden rounded-lg border border-neutral-200 bg-white xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto"
+        className="flex h-full flex-col overflow-hidden rounded-lg border border-neutral-200 bg-white"
       >
         {selected ? (
           <>
-            <div className="border-b border-neutral-200 px-4 py-3">
+            <div className="shrink-0 border-b border-neutral-200 px-4 py-3">
               <div className="flex items-start gap-2">
                 <p className="min-w-0 flex-1 text-[13.5px] font-semibold leading-relaxed text-neutral-900">
                   {selected.question}
@@ -323,7 +328,7 @@ export function PoolBrowser({
                 ))}
               </div>
             </div>
-            <div className="px-4 py-3.5">
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3.5">
               <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-neutral-400">
                 答案
               </div>
