@@ -274,3 +274,157 @@ export function parseAnswerBlocks(text: string): AnswerBlock[] {
   flushAll();
   return blocks;
 }
+
+// ---------- 重生成答案的分段解析 ----------
+//
+// 新答案（scripts/regen-answers.mjs 生成）结构固定：
+//   第 1 行：一句话结论
+//   1. 要点标题        ← 编号 + 短标题（可能带冒号）
+//   正文……
+//   - set(T value)：xxx  ← 子项
+//
+// 旧答案没有这个结构，用上面的 parseAnswerBlocks 兜底。
+
+export type AnswerSection = {
+  type: "lead" | "section" | "prose" | "code";
+  /** 结论文本 / 要点标题 */
+  title?: string;
+  body: string;
+  items: AnswerItem[];
+};
+
+export type AnswerItem = { label?: string; text: string };
+
+/** 编号，兼容阿拉伯数字与中文数字：`1.` `一、` `(1)` */
+const NUM = "(\\d{1,2}|[一二三四五六七八九十]{1,3})";
+
+/**
+ * 编号与标题之间的分隔符可能叠用：`1. ` `1、` `1)` `1).` `(1) `。
+ * 只吃掉一个会留下多余的 `.`，标题变成「. 实现 Serializable 接口」。
+ */
+const SEP = "[.．、)）]{1,3}";
+
+/** 编号小标题，冒号可有可无：`1. 底层数据结构设计` / `一、底层机制：` */
+const SECTION_HEAD = new RegExp(`^${NUM}${SEP}\\s*([^，。；]{2,40}?)[：:]?\\s*$`);
+/**
+ * 编号 + 标题 + 同一行就有正文，冒号可有可无：
+ *   `1. 可重入实现：内部 Sync 继承 AQS…`
+ *   `1. 变量可见性。JMM 抽象出主内存…`   ← 标题以句号结尾，正文紧随其后
+ */
+const SECTION_INLINE = new RegExp(`^${NUM}${SEP}\\s*([^，；：。]{2,24})[：:。]\\s*(\\S.{5,})$`);
+
+/**
+ * 兜底：编号后直接是一长句、没有独立标题。取到第一个逗号/分号为止当标题。
+ *   `1. Runnable 只有 void run()，不能返回结果…` → 标题「Runnable 只有 void run()」
+ */
+const SECTION_LOOSE = new RegExp(`^${NUM}${SEP}\\s*([^，；：。]{2,30})[，；]\\s*(\\S.{5,})$`);
+
+/** 子项：`- set(T value)：xxx` / `• 抽象：xxx` */
+const BULLET_ITEM = /^[-·•*]\s*(.*)$/;
+
+/** 子项里的「标签：正文」拆开，标签用于加粗 */
+function splitLabel(text: string): AnswerItem {
+  const m = text.match(/^([^：:]{1,30})[：:]\s*(\S.*)$/);
+  // 标签本身不能是长句，也不能以标点结尾
+  if (m && !/[，。；]/.test(m[1])) return { label: m[1].trim(), text: m[2].trim() };
+  return { text };
+}
+
+export function parseAnswerSections(raw: string): AnswerSection[] {
+  const lines = raw.split("\n").map((l) => l.trim());
+  const out: AnswerSection[] = [];
+  let cur: AnswerSection | null = null;
+  const lead: string[] = [];
+  let code: string[] = [];
+
+  // 代码单独成段，不和正文混在 items 里
+  const flushCode = () => {
+    if (code.length) {
+      const body = code.join("\n").trim();
+      if (body) out.push({ type: "code", body, items: [] });
+      code = [];
+      cur = null;
+    }
+  };
+  const pushProse = () => {
+    cur = { type: "prose", body: "", items: [] };
+    out.push(cur);
+    return cur;
+  };
+
+  for (const line of lines) {
+    if (!line) { flushCode(); continue; }
+
+    // 已在代码块内：只有明显的新段落才退出，其余一律并入
+    if (code.length) {
+      const isCodeLike =
+        CODE_START.test(line) ||
+        CODE_HINT.test(line) ||
+        /^\s{2,}/.test(line) ||
+        /^[\w\s.,()<>="'\[\]+*/$&|?:-]+$/.test(line) ||
+        /^[})]/.test(line) ||
+        /[{(;]$/.test(line);
+      if (isCodeLike) { code.push(line); continue; }
+      flushCode();
+    }
+
+    // 代码块起点
+    if (CODE_START.test(line) || (CODE_HINT.test(line) && line.length > 8)) {
+      code.push(line);
+      continue;
+    }
+
+    // 规范编号小标题
+    const head = line.match(SECTION_HEAD);
+    if (head) {
+      cur = { type: "section", title: head[2].trim(), body: "", items: [] };
+      out.push(cur);
+      continue;
+    }
+    // 编号 + 标题 + 行内正文
+    // 代码注释或代码行里的编号不算小标题
+    const looksCode = /[;{}]\s*$|^\s*(\/\/|\*|#)/.test(line);
+    const inline = looksCode ? null : (line.match(SECTION_INLINE) ?? line.match(SECTION_LOOSE));
+    if (inline && !/^\d+\.\s*\d/.test(line)) {
+      cur = { type: "section", title: inline[2].trim(), body: inline[3].trim(), items: [] };
+      out.push(cur);
+      continue;
+    }
+
+    // 子项
+    const bullet = line.match(BULLET_ITEM);
+    if (bullet) {
+      (cur ?? pushProse()).items.push(splitLabel(bullet[1]));
+      continue;
+    }
+
+    // 还没遇到任何小标题 → 归入结论
+    if (!out.some((s) => s.type === "section")) {
+      lead.push(line);
+      continue;
+    }
+
+    // 其余正文：接到当前小节的 body
+    const target = cur ?? pushProse();
+    target.body = target.body ? `${target.body}\n${line}` : line;
+  }
+  flushCode();
+
+  // 结论段放最前
+  if (lead.length) out.unshift({ type: "lead", body: lead.join("\n"), items: [] });
+  return out.filter((s) => s.type === "lead" || s.title || s.body || s.items.length);
+}
+
+/** 是否为新格式：第一行是完整句子且后面跟着编号小节 */
+export function hasSections(raw: string): boolean {
+  const lines = raw.split("\n").filter(Boolean);
+  if (lines.length < 2) return false;
+  return lines
+    .slice(1)
+    .some(
+      (l) =>
+        SECTION_HEAD.test(l.trim()) ||
+        SECTION_INLINE.test(l.trim()) ||
+        SECTION_LOOSE.test(l.trim()),
+    );
+}

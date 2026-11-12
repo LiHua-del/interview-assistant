@@ -172,7 +172,7 @@ export function PoolBrowser({
         {(keyword || category || favoritesOnly) && (
           <button
             onClick={() => navigate({ q: "", c: "", f: false, p: 0 })}
-            className="text-xs text-neutral-500 underline hover:text-neutral-800"
+            className="-my-2 inline-flex min-h-9 items-center px-1 text-xs text-neutral-500 underline hover:text-neutral-800"
           >
             清除筛选
           </button>
