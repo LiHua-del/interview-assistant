@@ -45,7 +45,7 @@ async function gen(question, oldAnswer, level) {
       messages: [{ role: "system", content: SYSTEM }, { role: "user", content: user }],
       max_tokens: 8000,
     }),
-    signal: AbortSignal.timeout(420000),
+    signal: AbortSignal.timeout(240000),
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}: ${(await res.text()).slice(0, 150)}`);
   const j = await res.json();
@@ -73,7 +73,7 @@ async function rewriteQ(question, answer) {
       ],
       max_tokens: 4000,
     }),
-    signal: AbortSignal.timeout(300000),
+    signal: AbortSignal.timeout(180000),
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const j = await res.json();
@@ -91,6 +91,13 @@ function quality(text) {
   return "ok";
 }
 
+/**
+ * 上游账号池会间歇性返回 503（no_healthy_account）：单次请求可能撞上
+ * 正在被限流的账号，下一次就正常。这类错误必须重试，且退避要够长，
+ * 否则整批题会在抖动期间被刷成失败。
+ */
+const isTransient = (msg) => /503|no_healthy_account|temporarily unavailable/i.test(msg);
+
 async function withRetry(fn, tries = 3) {
   for (let i = 0; i < tries; i++) {
     try {
@@ -98,7 +105,13 @@ async function withRetry(fn, tries = 3) {
       if (v && v.length >= 40) return { ok: true, value: v };
       if (i === tries - 1) return { ok: false, error: `质量不合格(${quality(v)})` };
     } catch (e) {
-      if (i === tries - 1) return { ok: false, error: e.message.slice(0, 80) };
+      const msg = e.message.slice(0, 80);
+      if (i === tries - 1) return { ok: false, error: msg };
+      // 上游抖动：多等一会儿再试，第一次就等 10s，之后翻倍
+      if (isTransient(msg)) {
+        await new Promise((r) => setTimeout(r, 10000 * 2 ** i));
+        continue;
+      }
     }
     await new Promise((r) => setTimeout(r, 2000 * (i + 1)));
   }
@@ -131,6 +144,11 @@ const todo = rows.filter((r) => !done.has(r.id) || !done.get(r.id).ok);
 console.log(`「${category}」共 ${rows.length} 题，待处理 ${todo.length} 题，并发 ${concurrency}`);
 
 let cursor = 0, finished = 0;
+// 熔断：上游账号池耗尽时会连续返回 503，此时继续跑只会把整批题刷成失败。
+// 连续失败达到阈值就停，已完成的结果照常落盘，恢复后重跑会跳过成功的。
+const FAIL_LIMIT = 20;
+let consecutiveFail = 0;
+let aborted = false;
 const results = [...rows].map((r) => done.get(r.id) ?? { id: r.id, question: r.question, ok: false });
 
 function save() {
@@ -142,6 +160,7 @@ function save() {
 
 async function worker() {
   while (true) {
+    if (aborted) return;
     const i = cursor++;
     if (i >= todo.length) return;
     const row = todo[i];
@@ -158,23 +177,35 @@ async function worker() {
     }
 
     // 先不带旧答案；不足 300 字再带旧答案重试一次
-    let ans = await withRetry(() => gen(question, "", 0));
+    let ans = await withRetry(() => gen(question, "", 0), 5);
     if (ans.ok && ans.value.length < 300) {
-      const retry = await withRetry(() => gen(question, row.answer, 1));
+      const retry = await withRetry(() => gen(question, row.answer, 1), 5);
       if (retry.ok && retry.value.length > ans.value.length) ans = retry;
     }
 
     const idx = results.findIndex((x) => x.id === row.id);
     if (ans.ok) {
+      consecutiveFail = 0;
       results[idx] = {
         id: row.id, question, answer: ans.value, rewritten,
         oldQuestion: row.question, ok: true, ms: Date.now() - t0,
       };
     } else {
+      consecutiveFail++;
       results[idx] = {
         id: row.id, question: row.question, oldQuestion: row.question,
         ok: false, error: ans.error, ms: Date.now() - t0,
       };
+      if (consecutiveFail >= FAIL_LIMIT) {
+        save();
+        console.error(
+          `\n连续 ${consecutiveFail} 条失败，判断为上游不可用，中止本分类。` +
+            `\n已完成的结果已保存，服务恢复后重跑会跳过成功的题目。`,
+        );
+        aborted = true;
+        process.exitCode = 2;
+        return;
+      }
     }
     finished++;
     save();
